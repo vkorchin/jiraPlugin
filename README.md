@@ -1,41 +1,258 @@
-# jiraPlugin
+# Система потоковой обработки событий с откатом состояний
 
-![Build](https://github.com/vkorchin/jiraPlugin/workflows/Build/badge.svg)
-[![Version](https://img.shields.io/jetbrains/plugin/v/PLUGIN_ID.svg)](https://plugins.jetbrains.com/plugin/PLUGIN_ID)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/PLUGIN_ID.svg)](https://plugins.jetbrains.com/plugin/PLUGIN_ID)
+Высокопроизводительная Java система для обработки потоковых событий в реальном времени с возможностью отката состояний сущностей к любому моменту времени.
 
-## Template ToDo list
-- [x] Create a new [IntelliJ Platform Plugin Template][template] project.
-- [ ] Get familiar with the [template documentation][template].
-- [ ] Verify the [pluginGroup](/gradle.properties), [plugin ID](/src/main/resources/META-INF/plugin.xml) and [sources package](/src/main/kotlin).
-- [ ] Review the [Legal Agreements](https://plugins.jetbrains.com/docs/marketplace/legal-agreements.html).
-- [ ] [Publish a plugin manually](https://plugins.jetbrains.com/docs/intellij/publishing-plugin.html?from=IJPluginTemplate) for the first time.
-- [ ] Set the Plugin ID in the above README badges.
-- [ ] Set the [Deployment Token](https://plugins.jetbrains.com/docs/marketplace/plugin-upload.html).
-- [ ] Click the <kbd>Watch</kbd> button on the top of the [IntelliJ Platform Plugin Template][template] to be notified about releases containing new features and fixes.
+## 🚀 Ключевые возможности
 
-<!-- Plugin description -->
-This Fancy IntelliJ Platform Plugin is going to be your implementation of the brilliant ideas that you have.
+- **Потоковая обработка**: Обработка миллионов событий в минуту
+- **Откат состояний**: Быстрый откат к любому моменту времени (< 100 мс)
+- **Потокобезопасность**: Полная thread-safety для параллельной обработки
+- **Расширяемость**: Легкое добавление новых типов событий
+- **Оптимизация**: Система snapshot'ов для ускорения откатов
+- **Стратегии отката**: Множественные стратегии с автовыбором оптимальной
 
-This specific section is a source for the [plugin.xml](/src/main/resources/META-INF/plugin.xml) file which will be extracted by the [Gradle](/build.gradle.kts) during the build process.
+## 🏗️ Архитектура
 
-To keep everything working, do not remove `<!-- ... -->` sections. 
-<!-- Plugin description end -->
+### Основные компоненты
 
-## Installation
+```
+┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
+│   EventStream   │───▶│  EventProcessor  │───▶│  StateManager   │
+└─────────────────┘    └──────────────────┘    └─────────────────┘
+                                │                        │
+                                ▼                        ▼
+                       ┌──────────────────┐    ┌─────────────────┐
+                       │ EventHandlerRegistry│    │ SnapshotManager │
+                       └──────────────────┘    └─────────────────┘
+                                │                        │
+                                ▼                        ▼
+                       ┌──────────────────┐    ┌─────────────────┐
+                       │  RollbackService │◀───│   Rollbacks     │
+                       └──────────────────┘    └─────────────────┘
+```
 
-- Using IDE built-in plugin system:
-  
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "jiraPlugin"</kbd> >
-  <kbd>Install Plugin</kbd>
-  
-- Manually:
+### Модели данных
 
-  Download the [latest release](https://github.com/vkorchin/jiraPlugin/releases/latest) and install it manually using
-  <kbd>Settings/Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
+- **Event**: Базовое событие с entityId, timestamp, eventType, payload
+- **Entity**: Сущность с состоянием (copy-on-write)
+- **Snapshot**: Снимок состояния сущности в определенный момент времени
 
+### Менеджеры
 
----
-Plugin based on the [IntelliJ Platform Plugin Template][template].
+- **StateManager**: Управление текущими состояниями и историей событий
+- **SnapshotManager**: Создание и управление снимками для оптимизации
+- **EventHandlerRegistry**: Реестр обработчиков событий
 
-[template]: https://github.com/JetBrains/intellij-platform-plugin-template
+## 🎯 Стратегии отката
+
+1. **FAST_SNAPSHOT_ONLY**: Использует только ближайший snapshot (самый быстрый)
+2. **SNAPSHOT_PLUS_EVENTS**: Snapshot + события после него (оптимальный)
+3. **FULL_EVENT_REPLAY**: Перепроигрывание всех событий (самый точный)
+
+## 📦 Структура проекта
+
+```
+src/main/java/com/eventprocessing/
+├── model/              # Модели данных
+│   ├── Event.java
+│   ├── Entity.java
+│   └── Snapshot.java
+├── stream/             # Потоки событий
+│   ├── EventStream.java
+│   └── InMemoryEventStream.java
+├── handler/            # Обработчики событий
+│   ├── EventHandler.java
+│   ├── EventHandlerRegistry.java
+│   └── impl/           # Конкретные обработчики
+├── state/              # Управление состояниями
+│   └── StateManager.java
+├── snapshot/           # Управление снимками
+│   └── SnapshotManager.java
+├── processor/          # Основной процессор
+│   └── EventProcessor.java
+├── rollback/           # Сервис откатов
+│   └── RollbackService.java
+└── demo/               # Демонстрационные примеры
+    └── EventProcessingDemo.java
+```
+
+## 🚀 Быстрый старт
+
+### 1. Создание и запуск системы
+
+```java
+// Создание компонентов
+EventProcessor processor = new EventProcessor();
+InMemoryEventStream eventStream = new InMemoryEventStream();
+
+// Регистрация обработчиков событий
+processor.registerEventHandler(new CreateEventHandler());
+processor.registerEventHandler(new UpdateEventHandler());
+processor.registerEventHandler(new DeleteEventHandler());
+processor.registerEventHandler(new StatusChangeEventHandler());
+
+// Запуск системы
+processor.start(eventStream);
+```
+
+### 2. Отправка событий
+
+```java
+// Создание сущности
+eventStream.pushEvent("user123", "CREATE", Map.of(
+    "name", "John Doe",
+    "email", "john@example.com",
+    "status", "active"
+));
+
+// Обновление сущности
+eventStream.pushEvent("user123", "UPDATE", Map.of(
+    "email", "john.doe@example.com"
+));
+
+// Изменение статуса
+eventStream.pushEvent("user123", "STATUS_CHANGE", Map.of(
+    "status", "inactive"
+));
+```
+
+### 3. Получение состояния
+
+```java
+// Текущее состояние
+Entity currentState = processor.getCurrentState("user123");
+
+// Откат к определенному времени
+RollbackService rollbackService = new RollbackService(
+    processor.stateManager, 
+    processor.snapshotManager, 
+    processor.handlerRegistry
+);
+
+CompletableFuture<RollbackResult> future = rollbackService.rollbackToTime(
+    "user123", 
+    Instant.now().minus(1, ChronoUnit.HOURS),
+    RollbackStrategy.SNAPSHOT_PLUS_EVENTS
+);
+
+RollbackResult result = future.get();
+Entity pastState = result.getEntity();
+```
+
+### 4. Создание собственного обработчика событий
+
+```java
+public class CustomEventHandler implements EventHandler {
+    @Override
+    public String getEventType() {
+        return "CUSTOM_EVENT";
+    }
+    
+    @Override
+    public Entity handle(Event event, Entity currentEntity) {
+        Entity entity = currentEntity != null ? currentEntity : new Entity(event.getEntityId());
+        
+        // Ваша логика обработки
+        Map<String, Object> updates = new HashMap<>(event.getPayload());
+        updates.put("processedAt", Instant.now());
+        
+        return entity.withUpdatedState(updates, event.getTimestamp());
+    }
+}
+
+// Регистрация
+processor.registerEventHandler(new CustomEventHandler());
+```
+
+## 📊 Производительность
+
+### Целевые показатели
+- **Обработка событий**: > 1,000,000 событий/минуту
+- **Время отката**: < 100 мс для большинства случаев
+- **Потокобезопасность**: Полная поддержка параллельной обработки
+
+### Оптимизации
+- **Copy-on-write** для состояний сущностей
+- **ConcurrentHashMap** и **ConcurrentSkipListMap** для thread-safety
+- **ReadWriteLock** для минимизации блокировок
+- **Автоматические snapshot'ы** каждые N событий
+- **Умный выбор стратегии** отката
+
+## 🧪 Тестирование
+
+### Запуск демонстрации
+```bash
+java -cp target/classes com.eventprocessing.demo.EventProcessingDemo
+```
+
+### Запуск тестов
+```bash
+java -ea -cp target/classes com.eventprocessing.EventProcessingTest
+```
+
+## 🔧 Конфигурация
+
+### SnapshotManager
+```java
+// Snapshot каждые 50 событий, максимум 20 snapshot'ов на сущность
+SnapshotManager snapshotManager = new SnapshotManager(50, 20);
+```
+
+### EventProcessor
+```java
+// Пул потоков размером 8
+EventProcessor processor = new EventProcessor(8);
+```
+
+## 🛡️ Обработка ошибок и отказоустойчивость
+
+- **Graceful degradation**: Система продолжает работать при ошибках обработки отдельных событий
+- **Exception isolation**: Ошибки в одном обработчике не влияют на другие
+- **Automatic recovery**: Автоматическое восстановление после сбоев
+- **Memory management**: Автоматическая очистка старых событий и snapshot'ов
+
+## 🎯 Решение подводных камней
+
+### 1. Гонка состояний
+- **ReadWriteLock** для каждой сущности
+- **Copy-on-write** подход для состояний
+- **Атомарные операции** для критических секций
+
+### 2. Управление памятью
+- **Автоматическая очистка** старых событий
+- **Лимиты на количество** snapshot'ов
+- **Lazy loading** для больших объемов данных
+
+### 3. Неупорядоченные события
+- **Сортировка по timestamp** в ConcurrentSkipListMap
+- **Буферизация** для обработки поздних событий
+- **Конфигурируемые окна** ожидания
+
+### 4. Расширяемость
+- **Паттерн Strategy** для обработчиков событий
+- **Реестр обработчиков** для динамической регистрации
+- **Интерфейсы** для легкого добавления новых компонентов
+
+## 📈 Мониторинг и метрики
+
+```java
+EventProcessor.ProcessingStats stats = processor.getStats();
+System.out.println("Обработано событий: " + stats.processedEvents);
+System.out.println("Количество сущностей: " + stats.entityCount);
+System.out.println("Количество snapshot'ов: " + stats.snapshotCount);
+System.out.println("Среднее время обработки: " + stats.avgProcessingTimeMs + " мс");
+System.out.println("Среднее время отката: " + stats.avgRollbackTimeMs + " мс");
+```
+
+## 🤝 Расширение системы
+
+Система спроектирована для легкого расширения:
+
+1. **Новые типы событий**: Создайте EventHandler
+2. **Новые источники событий**: Реализуйте EventStream
+3. **Новые стратегии отката**: Расширьте RollbackService
+4. **Новые типы хранилищ**: Замените StateManager
+
+## 📄 Лицензия
+
+Этот проект создан в образовательных целях и демонстрирует лучшие практики разработки высокопроизводительных систем обработки событий на Java.
