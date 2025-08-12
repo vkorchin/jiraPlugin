@@ -111,6 +111,15 @@ tasks {
         // pluginVersion is based on the SemVer (https://semver.org) and supports pre-release labels, like 2.1.7-alpha.3
         // Specify pre-release label to publish the plugin in a custom Release Channel automatically. Read more:
         // https://plugins.jetbrains.com/docs/intellij/deployment.html#specifying-a-release-channel
-        channels.set(listOf(properties("pluginVersion").split('-').getOrElse(1) { "default" }.split('.').first()))
+        channels.set(listOf("default"))
+    }
+
+    // Run demo main class
+    register<JavaExec>("runDemo") {
+        group = "application"
+        description = "Run event stream demo"
+        val sourceSets = project.extensions.getByType(org.gradle.api.tasks.SourceSetContainer::class.java)
+        classpath = sourceSets.getByName("main").runtimeClasspath
+        mainClass.set("com.github.vkorchin.eventstream.demo.Demo")
     }
 }
